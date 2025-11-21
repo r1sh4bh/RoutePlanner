@@ -1,0 +1,5 @@
+{
+  "name": "RoadTrip AI Planner",
+  "description": "An intelligent road trip optimizer that plans your route, stops, and overnight stays based on your destinations and driving preferences.",
+  "requestFramePermissions": []
+}
