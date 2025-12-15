@@ -1,3 +1,4 @@
+
 export enum SegmentType {
   DRIVE = 'DRIVE',
   VISIT = 'VISIT',
@@ -37,10 +38,16 @@ export interface TripItinerary {
   days: DayPlan[];
 }
 
+export interface Destination {
+  name: string;
+  durationDays: number;
+}
+
 export interface TripPreferences {
   maxDriveHoursPerDay: number;
   startCity: string;
   roundTrip: boolean;
+  returnRouteStyle: 'retrace' | 'loop';
   startDate: string;
   stopsFrequency: 'low' | 'medium' | 'high';
   amenityType: string;
@@ -50,6 +57,7 @@ export const DEFAULT_PREFERENCES: TripPreferences = {
   maxDriveHoursPerDay: 6,
   startCity: '',
   roundTrip: false,
+  returnRouteStyle: 'loop',
   startDate: new Date().toISOString().split('T')[0],
   stopsFrequency: 'medium',
   amenityType: 'Scenic & Local Gems'

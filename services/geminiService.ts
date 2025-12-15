@@ -1,11 +1,12 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { TripItinerary, TripPreferences } from "../types";
+import { TripItinerary, TripPreferences, Destination } from "../types";
 
 // Initialize API client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const generateTripPlan = async (
-  destinations: string[],
+  destinations: Destination[],
   preferences: TripPreferences
 ): Promise<TripItinerary> => {
   
@@ -15,34 +16,43 @@ export const generateTripPlan = async (
 
   const model = "gemini-2.5-flash";
 
+  const destinationList = destinations.map(d => `${d.name} (${d.durationDays} days stay)`).join(", ");
+
   const systemInstruction = `
     You are an expert travel logistics algorithm. Your goal is to plan the perfect road trip.
     
     Inputs provided:
     1. A starting city.
-    2. A list of target destinations to visit.
+    2. A list of target destinations to visit, potentially with preferred stay durations (e.g., "Paris (2 days stay)").
     3. Constraints: Maximum driving hours per day.
     4. Whether to return to the start (round trip).
-    5. Preferences for stop frequency and amenity types (e.g., fast food chains vs scenic spots).
+    5. Preferences for stop frequency and amenity types.
+    6. Return Route Style (if round trip): 'loop' (spoon shape, different path back) vs 'retrace' (same path back).
 
     Your Tasks:
-    1. SOLVE THE TRAVELING SALESMAN PROBLEM: Reorder the destinations to minimize total driving time and eliminate backtracking.
-    2. SCHEDULE: Break the trip into days. Ensure the total driving time per day does NOT exceed the user's limit.
-    3. INSERT BREAKS: 
+    1. SOLVE THE TRAVELING SALESMAN PROBLEM: Reorder the destinations to minimize total driving time.
+    2. ROUTE SHAPE: 
+       - If Round Trip is YES and style is 'loop', plan a "spoon" or circular route. The return leg should use different highways/routes/stopovers than the outbound leg to maximize sightseeing. Avoid backtracking on the same roads if possible.
+       - If Round Trip is YES and style is 'retrace', simply reverse the outbound route (or take the fastest path back).
+    3. SCHEDULE: Break the trip into days. 
+       - IMPORTANT: Account for the "Stay Duration" at destinations. If a user wants to stay 2 days in a city, that city should occupy 2 full days in the itinerary with minimal driving on those days (mostly "VISIT" segments).
+       - Ensure the total driving time per day does NOT exceed the user's limit.
+    4. INSERT BREAKS: 
        - If preference is 'high' frequency, suggest breaks every 2 hours.
        - If 'medium', every 3 hours.
        - If 'low', maximize driving stints.
        - Tailor the *type* of break to the user's amenity preference (e.g., if "McDonalds", suggest chains; if "Scenic", suggest viewpoints).
-    4. INSERT OVERNIGHTS: Explicitly state where the user should sleep at the end of each day.
-    5. DAYLIGHT: Prioritize driving during daylight hours.
-    6. GEOLOCATION: You MUST provide accurate latitude and longitude coordinates for the start location and every stop/location mentioned in the segments.
+    5. INSERT OVERNIGHTS: Explicitly state where the user should sleep at the end of each day.
+    6. DAYLIGHT: Prioritize driving during daylight hours.
+    7. GEOLOCATION: You MUST provide accurate latitude and longitude coordinates for the start location and every stop/location mentioned in the segments.
   `;
 
   const userPrompt = `
     Plan a road trip starting from: ${preferences.startCity}.
-    Destinations to visit: ${destinations.join(", ")}.
+    Destinations to visit (and required stay duration): ${destinationList}.
     Max driving hours per day: ${preferences.maxDriveHoursPerDay}.
     Round trip: ${preferences.roundTrip ? "Yes" : "No, end at last destination"}.
+    ${preferences.roundTrip ? `Return Route Style: ${preferences.returnRouteStyle === 'loop' ? "Loop/Spoon (Plan a different return path to see new areas)" : "Retrace (Fastest/Same path back preferred)"}.` : ""}
     Start Date: ${preferences.startDate}.
     Stop Frequency: ${preferences.stopsFrequency} (low=fewer stops, high=more frequent breaks).
     Preferred Stop Type: ${preferences.amenityType}.

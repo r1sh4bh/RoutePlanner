@@ -1,20 +1,74 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { DestinationInput } from './components/DestinationInput';
 import { TripTimeline } from './components/TripTimeline';
 import { TripHeader } from './components/TripHeader';
 import { MapView } from './components/MapView';
-import { TripItinerary, TripPreferences, DEFAULT_PREFERENCES } from './types';
+import { TripItinerary, TripPreferences, DEFAULT_PREFERENCES, Destination } from './types';
 import { generateTripPlan } from './services/geminiService';
 import { Compass, AlertCircle, List, Map as MapIcon } from 'lucide-react';
 
 export default function App() {
-  const [destinations, setDestinations] = useState<string[]>([]);
-  const [preferences, setPreferences] = useState<TripPreferences>(DEFAULT_PREFERENCES);
-  const [tripPlan, setTripPlan] = useState<TripItinerary | null>(null);
+  // Load state from localStorage with lazy initialization
+  const [destinations, setDestinations] = useState<Destination[]>(() => {
+    try {
+      const saved = localStorage.getItem('roadtrip_destinations');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Migration: Check if it's the old string[] format and convert to Destination[]
+        if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+          return parsed.map((d: string) => ({ name: d, durationDays: 1 }));
+        }
+        return parsed;
+      }
+      return [];
+    } catch (e) {
+      console.error("Failed to load destinations from storage", e);
+      return [];
+    }
+  });
+
+  const [preferences, setPreferences] = useState<TripPreferences>(() => {
+    try {
+      const saved = localStorage.getItem('roadtrip_preferences');
+      return saved ? { ...DEFAULT_PREFERENCES, ...JSON.parse(saved) } : DEFAULT_PREFERENCES;
+    } catch (e) {
+      console.error("Failed to load preferences from storage", e);
+      return DEFAULT_PREFERENCES;
+    }
+  });
+
+  const [tripPlan, setTripPlan] = useState<TripItinerary | null>(() => {
+    try {
+      const saved = localStorage.getItem('roadtrip_plan');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.error("Failed to load trip plan from storage", e);
+      return null;
+    }
+  });
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'timeline' | 'map'>('timeline');
+
+  // Persist state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('roadtrip_destinations', JSON.stringify(destinations));
+  }, [destinations]);
+
+  useEffect(() => {
+    localStorage.setItem('roadtrip_preferences', JSON.stringify(preferences));
+  }, [preferences]);
+
+  useEffect(() => {
+    if (tripPlan) {
+      localStorage.setItem('roadtrip_plan', JSON.stringify(tripPlan));
+    } else {
+      localStorage.removeItem('roadtrip_plan');
+    }
+  }, [tripPlan]);
 
   const handleGenerate = async () => {
     setIsLoading(true);
@@ -33,6 +87,16 @@ export default function App() {
     }
   };
 
+  const handleClearTrip = () => {
+    if (window.confirm("Start a new trip? This will clear your current itinerary and settings.")) {
+      setDestinations([]);
+      setPreferences(DEFAULT_PREFERENCES);
+      setTripPlan(null);
+      setError(null);
+      // LocalStorage updates are handled by the useEffects reacting to state changes
+    }
+  };
+
   return (
     <div className="min-h-screen pb-12 font-sans text-slate-800">
       <Header />
@@ -48,6 +112,7 @@ export default function App() {
               preferences={preferences}
               setPreferences={setPreferences}
               onGenerate={handleGenerate}
+              onClear={handleClearTrip}
               isLoading={isLoading}
             />
           </div>
